@@ -35,7 +35,7 @@ gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/trusted.gpg --recv-ke
 # TODO: This patch was submitted upstream at:
 # https://salsa.debian.org/live-team/live-build/-/merge_requests/314
 # This can be removed when our Debian container has a version containing this fix
-patch -d /usr/lib/live/build/ < 314-follow-symlinks-when-measuring-size-of-efi-files.patch
+#patch -d /usr/lib/live/build/ < 314-follow-symlinks-when-measuring-size-of-efi-files.patch
 
 # TODO: Remove this once debootstrap can natively build noble images:
 ln -sfn /usr/share/debootstrap/scripts/gutsy /usr/share/debootstrap/scripts/noble
