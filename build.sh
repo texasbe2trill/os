@@ -27,9 +27,60 @@ echo -e "
 "
 
 apt-get update
-apt-get install -y live-build patch gnupg2 binutils zstd
+apt-get install -y live-build patch gnupg2 binutils zstd dirmngr curl
 
-gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/trusted.gpg --recv-keys --keyserver keyserver.ubuntu.com F6ECB3762474EDA9D21B7022871920D1991BC93C
+# Try Release file first, then Launchpad API if not found
+KEY_IDS=$(curl -s http://ppa.launchpad.net/elementary-os/daily/ubuntu/dists/noble/Release | grep -E 'Signed-By|Signing-Key|fingerprint' | grep -oE '[A-F0-9]{16,40}' | sort | uniq)
+# Fallback: Try Launchpad API if none found
+if [ -z "$KEY_IDS" ]; then
+  echo "No key found in Release file, trying Launchpad API..."
+  KEY_IDS=$(curl -s "https://api.launchpad.net/1.0/~elementary-os/+archive/ubuntu/daily" | grep -oE '[A-F0-9]{16,40}')
+fi
+# If still not found, try to extract from apt error (if available)
+if [ -z "$KEY_IDS" ]; then
+  echo "ERROR: Could not detect any PPA signing keys!"
+  echo "Please specify the required key(s) via the KEY_IDS environment variable."
+  exit 1
+fi
+
+for KEY_ID in $KEY_IDS; do
+  echo "Attempting to import key $KEY_ID..."
+  # Try both full and short key IDs
+  for SEARCH_ID in "$KEY_ID" "${KEY_ID: -16}"; do
+    KEY_URL="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x$SEARCH_ID"
+    echo "Fetching $KEY_URL"
+    KEY_TMP="/tmp/elementary-os-$SEARCH_ID.gpg"
+    if curl --max-time 15 -fsSL "$KEY_URL" | grep -q "BEGIN PGP PUBLIC KEY BLOCK"; then
+      curl --max-time 15 -fsSL "$KEY_URL" | gpg --dearmor -o "$KEY_TMP"
+      cp "$KEY_TMP" "/etc/apt/trusted.gpg.d/elementary-os-$SEARCH_ID.gpg"
+      # Also append to /etc/apt/trusted.gpg for debootstrap compatibility
+      gpg --no-default-keyring --keyring "$KEY_TMP" --export >> /etc/apt/trusted.gpg
+      echo "Key $SEARCH_ID imported."
+      break
+    else
+      echo "WARNING: Key $SEARCH_ID could not be imported. Trying next form."
+    fi
+  done
+  echo "Finished attempt for $KEY_ID"
+done
+
+echo "Key import complete, running apt-get update..."
+apt-get update || { echo "apt-get update failed"; exit 1; }
+
+# Import the Ubuntu Noble archive key (required for debootstrap)
+UBUNTU_ARCHIVE_KEY="871920D1991BC93C"
+KEY_URL="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x$UBUNTU_ARCHIVE_KEY"
+KEY_TMP="/tmp/ubuntu-archive-$UBUNTU_ARCHIVE_KEY.gpg"
+echo "Importing Ubuntu archive key $UBUNTU_ARCHIVE_KEY..."
+if curl --max-time 15 -fsSL "$KEY_URL" | grep -q "BEGIN PGP PUBLIC KEY BLOCK"; then
+  curl --max-time 15 -fsSL "$KEY_URL" | gpg --dearmor -o "$KEY_TMP"
+  cp "$KEY_TMP" "/etc/apt/trusted.gpg.d/ubuntu-archive-$UBUNTU_ARCHIVE_KEY.gpg"
+  gpg --no-default-keyring --keyring "$KEY_TMP" --export >> /etc/apt/trusted.gpg
+  echo "Ubuntu archive key $UBUNTU_ARCHIVE_KEY imported."
+else
+  echo "ERROR: Could not import Ubuntu archive key $UBUNTU_ARCHIVE_KEY!"
+  exit 1
+fi
 
 ln -sfn /usr/share/debootstrap/scripts/gutsy /usr/share/debootstrap/scripts/noble
 
