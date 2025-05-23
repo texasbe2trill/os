@@ -25,7 +25,7 @@ echo -e "
 # INSTALL DEPENDENCIES #
 #----------------------#
 "
-
+apt-get update
 apt-get install -y live-build patch gnupg2 binutils zstd dirmngr curl
 
 # Try Release file first, then Launchpad API if not found
