@@ -26,7 +26,6 @@ echo -e "
 #----------------------#
 "
 
-apt-get update
 apt-get install -y live-build patch gnupg2 binutils zstd dirmngr curl
 
 # Try Release file first, then Launchpad API if not found
@@ -55,7 +54,8 @@ for KEY_ID in $KEY_IDS; do
       cp "$KEY_TMP" "/etc/apt/trusted.gpg.d/elementary-os-$SEARCH_ID.gpg"
       # Also append to /etc/apt/trusted.gpg for debootstrap compatibility
       gpg --no-default-keyring --keyring "$KEY_TMP" --export >> /etc/apt/trusted.gpg
-      echo "Key $SEARCH_ID imported."
+      gpg --no-default-keyring --keyring "$KEY_TMP" --export >> /etc/apt/trusted.gpg
+      rm -f "$KEY_TMP"
       break
     else
       echo "WARNING: Key $SEARCH_ID could not be imported. Trying next form."
